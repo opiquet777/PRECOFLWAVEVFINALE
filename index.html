@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Precommande</title>
+    <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js/dist/web3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        form {
+            margin-top: 20px;
+        }
+        input {
+            display: block;
+            margin: 10px auto;
+            padding: 10px;
+            width: 80%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Precommande de votre Pack Logiciel</h1>
+        <p>Prix du produit : 0.01533 ETH</p>
+        <p>Places disponibles : <span id="availableUnits">25</span></p>
+        <form id="preorderForm">
+            <input type="text" id="instagram" name="instagram" placeholder="Pseudo Instagram" required>
+            <input type="email" id="email" name="email" placeholder="Email" required>
+            <input type="text" id="wallet" name="wallet" placeholder="Adresse MetaMask" required>
+            <button type="submit">Precommander maintenant</button>
+        </form>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const receiverAddress = '0xf23B4FB36617Ebe27191166b5f83538EA707d444'; // Remplacez par votre adresse MetaMask
+        const maxUnits = 25; // Nombre maximum d'unités disponibles
+        const unitPrice = 0.01533; // Prix par unité en ETH
+        let unitsSold = 0; // Initialisation des unités vendues
+        const googleScriptURL = 'https://script.google.com/macros/s/AKfycbw2WCrhS2v27Ed4xwYI9D3PUUM0ozpXgou-09agyJfU2eeDatfVz-d_CAjQXjMNgByQtg/exec'; // Remplacez par l'URL de déploiement de votre script Google
+
+        // Fonction pour mettre à jour les unités disponibles affichées
+        function updateAvailableUnits() {
+            const availableUnits = maxUnits - unitsSold;
+            document.getElementById('availableUnits').innerText = availableUnits;
+        }
+
+        // Fonction pour gérer le paiement via MetaMask
+        async function payWithMetaMask(account, amountInWei) {
+            if (typeof window.ethereum !== 'undefined') {
+                const web3 = new Web3(window.ethereum);
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+                    // Transaction avec MetaMask
+                    web3.eth.sendTransaction({
+                        from: account,
+                        to: receiverAddress,
+                        value: amountInWei
+                    })
+                    .on('transactionHash', function(hash) {
+                        console.log('Transaction hash:', hash);
+                        document.getElementById('status').innerText = 'Transaction en cours...';
+                    })
+                    .on('confirmation', function(confirmationNumber, receipt) {
+                        console.log('Transaction confirmée:', receipt);
+                        unitsSold++;
+                        updateAvailableUnits();
+                        document.getElementById('status').innerText = 'Précommande réussie !';
+                    })
+                    .on('error', function(error) {
+                        console.error(error);
+                        document.getElementById('status').innerText = 'Erreur lors de la transaction.';
+                    });
+
+                } catch (error) {
+                    console.error("Erreur lors de la requête MetaMask", error);
+                    document.getElementById('status').innerText = 'Erreur lors de la requête MetaMask.';
+                }
+            } else {
+                alert('Veuillez installer MetaMask pour utiliser cette fonctionnalité.');
+            }
+        }
+
+        document.getElementById('preorderForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const instagram = document.getElementById('instagram').value;
+            const email = document.getElementById('email').value;
+            const wallet = document.getElementById('wallet').value;
+
+            const web3 = new Web3(window.ethereum);
+            const accounts = await web3.eth.getAccounts();
+            const account = accounts[0];
+            const amountInEth = unitPrice.toString();
+            const amountInWei = web3.utils.toWei(amountInEth, 'ether');
+
+            // Vérification des places disponibles
+            if (unitsSold >= maxUnits) {
+                document.getElementById('status').innerText = 'Toutes les places ont été vendues.';
+                return;
+            }
+
+            // Envoi des données du formulaire à Google Sheets
+            fetch(googleScriptURL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({instagram: instagram, email: email, wallet: wallet})
+            })
+            .then(() => {
+                // Procéder au paiement MetaMask
+                return payWithMetaMask(account, amountInWei);
+            })
+            .catch(error => {
+                console.error('Erreur lors de l\'envoi des données au Google Sheets', error);
+                document.getElementById('status').innerText = 'Erreur lors de l\'envoi des données.';
+            });
+        });
+
+        updateAvailableUnits(); // Mettre à jour les unités disponibles au chargement de la page
+    </script>
+</body>
+</html>
